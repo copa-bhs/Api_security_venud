@@ -83,12 +83,39 @@ def stats():
             WHERE c.genres != '[]' AND c.genres IS NOT NULL 
             GROUP BY j.value ORDER BY total DESC LIMIT 5
         """).fetchall()]
-    except Exception: generos = []
+    except Exception: 
+        generos = []
     conn.close()
+
+    # =========================================================
+    # CÁLCULO REAL DE USO DO BANCO DE DADOS
+    # =========================================================
+    db_file = Path(__file__).parent / "catalogo.db"
+    
+    if db_file.exists():
+        tamanho_bytes = db_file.stat().st_size
+        tamanho_mb = tamanho_bytes / (1024 * 1024)
+    else:
+        tamanho_mb = 0.0
+
+    # Cota de segurança para cálculo da porcentagem (500 MB)
+    COTA_MB = 500.0 
+    
+    porcentagem_usada = round((tamanho_mb / COTA_MB) * 100, 1)
+    if porcentagem_usada > 100:
+        porcentagem_usada = 100
+        
+    porcentagem_livre = round(100 - porcentagem_usada, 1)
+
     return jsonify({
         "total": total, "filmes": filmes, "series": series, "generos": generos,
         "usuarios": { "ativos": random.randint(5, 20), "inativos": random.randint(1, 5) },
-        "db_usage": { "usado": 45, "livre": 55 }
+        "db_usage": { 
+            "usado": porcentagem_usada, 
+            "livre": porcentagem_livre,
+            "tamanho_mb": round(tamanho_mb, 2),
+            "cota_mb": COTA_MB
+        }
     })
 
 @app.route("/api/conteudo", methods=["POST"])
@@ -99,7 +126,6 @@ def criar():
     ok, erros = 0, []
     for item in itens:
         try:
-            # Note que aqui removemos a coluna url_original
             conn.execute("""
                 INSERT OR IGNORE INTO conteudos
                 (iptv_id, stream_type, coletany, tmdb_id, imdb_id, title,
@@ -129,7 +155,6 @@ def editar_conteudo(id):
     dados = request.json
     conn = get_conn()
     try:
-        # Note que aqui também removemos a url_original
         conn.execute("""
             UPDATE conteudos SET 
                 title = ?, year = ?, poster = ?, backdrop = ?, 
