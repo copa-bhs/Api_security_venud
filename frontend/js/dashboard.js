@@ -1,6 +1,7 @@
 const Dashboard = {
   nuvemData: [],
   nuvemFiltrada: [],
+  bancoData: [], // Guarda os dados que já estão no banco
   filtroAtual: "todos",
   nuvemPage: 0,
   nuvemLimit: 20,
@@ -62,20 +63,12 @@ const Dashboard = {
         <!-- ABA PRINCIPAL: GRÁFICOS -->
         <section id="tab-main" class="tab-content active">
           <div class="charts-grid">
-            
-            <!-- Gráfico 1: Catálogo (Real) -->
             <div class="chart-card">
-              <div class="chart-header">
-                <h3>${icon("film")} Catálogo</h3>
-                <span>${s.total} itens totais</span>
-              </div>
+              <div class="chart-header"><h3>${icon("film")} Catálogo</h3><span>${s.total} itens totais</span></div>
               <div class="chart-body">
                 <div class="donut-wrapper">
-                  ${this.renderDonut(100, "var(--accent)")} <!-- Círculo completo para visual de catálogo -->
-                  <div class="donut-center">
-                    <strong>${s.total}</strong>
-                    <small>Itens</small>
-                  </div>
+                  ${this.renderDonut(100, "var(--accent)")}
+                  <div class="donut-center"><strong>${s.total}</strong><small>Itens</small></div>
                 </div>
                 <div class="chart-legend">
                   <div class="legend-item"><div class="legend-left"><span class="dot" style="background:var(--accent)"></span> Filmes</div> <b>${s.filmes}</b></div>
@@ -83,8 +76,6 @@ const Dashboard = {
                 </div>
               </div>
             </div>
-
-            <!-- Gráfico 2: Usuários -->
             <div class="chart-card">
               <div class="chart-header"><h3>${icon("users")} Usuários</h3><span>Atividade</span></div>
               <div class="chart-body">
@@ -98,17 +89,12 @@ const Dashboard = {
                 </div>
               </div>
             </div>
-
-            <!-- Gráfico 3: Armazenamento (Real) -->
             <div class="chart-card">
               <div class="chart-header"><h3>${icon("database")} Armazenamento</h3><span>Banco de Dados</span></div>
               <div class="chart-body">
                 <div class="donut-wrapper">
                   ${this.renderDonut(s.db_usage.usado, "var(--warn)")}
-                  <div class="donut-center">
-                    <strong>${s.db_usage.tamanho_mb} <span style="font-size:14px">MB</span></strong>
-                    <small>Usado</small>
-                  </div>
+                  <div class="donut-center"><strong>${s.db_usage.tamanho_mb} <span style="font-size:14px">MB</span></strong><small>Usado</small></div>
                 </div>
                 <div class="chart-legend">
                   <div class="legend-item"><div class="legend-left"><span class="dot" style="background:var(--warn)"></span> Ocupado</div> <b>${s.db_usage.usado}%</b></div>
@@ -116,11 +102,9 @@ const Dashboard = {
                 </div>
               </div>
             </div>
-            
           </div>
         </section>
 
-        <!-- ABA ADICIONAR -->
         <section id="tab-adicionar" class="tab-content">
           <div class="panel-header"><h2>${icon("plus")} Adicionar Novo Conteúdo</h2></div>
           <div class="form-grid">
@@ -135,18 +119,22 @@ const Dashboard = {
 
         <!-- ABA NUVEM -->
         <section id="tab-nuvem" class="tab-content">
-          <div class="panel-header">
-            <h2>${icon("upload")} Importar Mídias</h2>
-            <p class="sub">Importe em massa ou selecione individualmente do catálogo na nuvem.</p>
+          <div class="panel-header" style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap;">
+            <div>
+              <h2>${icon("upload")} Importar Mídias</h2>
+              <p class="sub">Importe em massa do catálogo na nuvem. Itens já importados são ignorados.</p>
+            </div>
+            <button id="btn-excluir-tudo" class="btn-ghost" style="color:var(--accent); border-color:var(--accent);">
+              ${icon("trash")} Limpar Banco de Dados
+            </button>
           </div>
 
           <div class="cloud-controls">
             <div class="input-group">
-              <label>Qtd. Importar</label>
+              <label>Qtd. Importar (apenas novos)</label>
               <input type="number" id="qtd-importar" value="50" min="1">
             </div>
             <button id="btn-importar-massa" class="btn-primary">${icon("upload")} Importar Massa</button>
-            <button id="btn-baixar-nuvem" class="btn-ghost">${icon("database")} Baixar Catálogo</button>
           </div>
 
           <div id="progress-container" class="hidden">
@@ -162,22 +150,34 @@ const Dashboard = {
           </div>
 
           <div id="nuvem-lista" class="grid" style="margin-top: 16px;">
-            <div class="empty" style="grid-column: 1/-1;"><p>Clique em "Baixar Catálogo" para buscar os itens.</p></div>
+            <div class="loading" style="grid-column: 1/-1">${icon("spinner","icon spin")} Carregando catálogo...</div>
           </div>
         </section>
 
         <section id="tab-usuarios" class="tab-content">
           <div class="panel-header"><h2>${icon("users")} Usuários</h2></div>
-          <div class="info-box"><p>Sistema de usuários em desenvolvimento.</p></div>
         </section>
         <section id="tab-config" class="tab-content">
           <div class="panel-header"><h2>${icon("settings")} Configurações</h2></div>
-          <div class="info-box"><p>Versão: 4.0.0 (Cache e Gráficos Reais)</p></div>
         </section>
       </div>
     `;
 
-    // Controle de Abas
+    // Carrega os dados automaticamente ao abrir a aba
+    this.carregarNuvemAuto();
+
+    // Configura o botão de excluir tudo
+    document.getElementById("btn-excluir-tudo").onclick = async () => {
+      if(!confirm("Tem certeza que deseja APAGAR TODOS os filmes e séries do banco?")) return;
+      try {
+        await fetch("/api/admin/excluir_tudo", { method: "DELETE" });
+        toast("Banco de dados limpo!");
+        Dashboard.render(el); // Recarrega a tela
+      } catch(e) {
+        toast("Erro ao limpar", "err");
+      }
+    };
+
     document.querySelectorAll(".drawer-item[data-tab]").forEach(btn => {
       btn.onclick = () => {
         document.querySelectorAll(".tab-content").forEach(t => t.classList.remove("active"));
@@ -189,7 +189,6 @@ const Dashboard = {
       };
     });
 
-    // Controle dos botões de categoria
     document.querySelectorAll(".cat-btn").forEach(btn => {
       btn.onclick = () => {
         document.querySelectorAll(".cat-btn").forEach(b => b.classList.remove("active"));
@@ -199,21 +198,8 @@ const Dashboard = {
       };
     });
 
-    document.getElementById("btn-baixar-nuvem").onclick = () => this.carregarNuvem();
     document.getElementById("btn-importar-massa").onclick = () => this.importarMassa();
-
-    // Configura o Scroll Infinito
-    window.onscroll = () => {
-      const tabNuvem = document.getElementById("tab-nuvem");
-      if (tabNuvem && tabNuvem.classList.contains("active") && this.nuvemData.length > 0) {
-        if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 500) {
-          if (this.nuvemPage * this.nuvemLimit < this.nuvemFiltrada.length) {
-            this.carregarMaisItens();
-          }
-        }
-      }
-    };
-
+    
     document.getElementById("btn-salvar-form").onclick = async () => {
       const payload = {
         title: document.getElementById("f-title").value,
@@ -236,16 +222,22 @@ const Dashboard = {
     };
   },
 
-  async carregarNuvem() {
+  async carregarNuvemAuto() {
     const lista = document.getElementById("nuvem-lista");
-    lista.innerHTML = `<div class="loading" style="grid-column: 1/-1">${icon("spinner","icon spin")} Baixando catálogo...</div>`;
     try {
+      // Puxa os dados da nuvem
       const res = await fetch("/api/nuvem");
       const data = await res.json();
       if (data.erro) throw new Error(data.erro);
       this.nuvemData = data;
-      toast(`${data.length} itens carregados!`);
+
+      // Puxa os dados que já estão no banco para saber o que ignorar
+      const resBanco = await fetch("/api/conteudos?limit=9999");
+      const dataBanco = await resBanco.json();
+      this.bancoData = dataBanco.itens;
+
       this.renderizarListaNuvem();
+      toast(`${data.length} itens carregados da nuvem!`);
     } catch (e) {
       lista.innerHTML = `<div class="empty" style="grid-column: 1/-1; color:var(--accent)"><p>Erro: ${e.message}</p></div>`;
     }
@@ -281,8 +273,12 @@ const Dashboard = {
     const end = start + this.nuvemLimit;
     const itensParaMostrar = this.nuvemFiltrada.slice(start, end);
 
-    const html = itensParaMostrar.map(i => `
-      <article class="card">
+    const html = itensParaMostrar.map(i => {
+      // Verifica se o item já está no banco de dados pelo titulo
+      const jaExiste = this.bancoData.some(b => b.title === i.title);
+      
+      return `
+      <article class="card" style="${jaExiste ? 'opacity: 0.6;' : ''}">
         <div class="poster">
           ${i.poster ? `<img src="${i.poster}" loading="lazy">` : `<div class="no-img">${icon("film")}</div>`}
           ${this.renderAgeRating(i.age_rating)}
@@ -292,22 +288,34 @@ const Dashboard = {
         </div>
         <div class="info">
           <h3 title="${i.title}">${i.title}</h3>
-          <button class="btn-primary" style="padding:8px; font-size:12px; margin-top:6px;" onclick="Dashboard.importarItem('${i.id || i.tmdb_id || i.title}')">
-            ${icon("upload")} Importar
+          <button class="btn-primary" style="padding:8px; font-size:12px; margin-top:6px;" 
+            ${jaExiste ? 'disabled' : `onclick="Dashboard.importarItem('${i.id || i.tmdb_id || i.title}')"`}>
+            ${jaExiste ? icon("check") + ' Já importado' : icon("upload") + ' Importar'}
           </button>
         </div>
       </article>
-    `).join("");
+      `;
+    }).join("");
 
     lista.insertAdjacentHTML('beforeend', html);
     this.nuvemPage++;
   },
 
   async importarMassa() {
-    if (this.nuvemData.length === 0) return toast("Baixe o catálogo primeiro!", "err");
     const qtd = parseInt(document.getElementById("qtd-importar").value) || 0;
-    const itensParaImportar = this.nuvemData.slice(0, qtd);
+    if (qtd < 1) return toast("Digite uma quantidade válida", "err");
+
+    // Filtra apenas os filmes/séries que AINDA NÃO estão no banco
+    const novosParaImportar = this.nuvemData.filter(i => !this.bancoData.some(b => b.title === i.title));
+    
+    if (novosParaImportar.length === 0) {
+      return toast("Todos os itens da nuvem já estão no banco de dados!", "err");
+    }
+
+    const itensParaImportar = novosParaImportar.slice(0, qtd);
     const total = itensParaImportar.length;
+
+    if (total === 0) return toast("Nenhum item novo para importar.", "err");
 
     const progContainer = document.getElementById("progress-container");
     const progFill = document.getElementById("progress-fill");
@@ -316,7 +324,7 @@ const Dashboard = {
 
     progContainer.classList.remove("hidden");
     progFill.style.width = "0%";
-    progText.textContent = "Enviando...";
+    progText.textContent = `Enviando ${total} novos itens...`;
     progPct.textContent = "0%";
 
     let inseridos = 0;
@@ -334,8 +342,11 @@ const Dashboard = {
     }
 
     progText.textContent = "Concluído!";
-    toast(`${inseridos} importados com sucesso!`);
+    toast(`${inseridos} novos itens importados!`);
     setTimeout(() => progContainer.classList.add("hidden"), 3000);
+    
+    // Recarrega os dados da tela para atualizar a lista
+    this.carregarNuvemAuto();
   },
 
   async importarItem(id) {
@@ -345,6 +356,10 @@ const Dashboard = {
     try {
       await API.criar(item);
       toast("Adicionado ao banco!");
+      
+      // Atualiza a lista local e re-renderiza para desativar o botão
+      this.bancoData.push(item); 
+      this.renderizarListaNuvem();
     } catch (e) {
       toast("Erro ao importar", "err");
     }

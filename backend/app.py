@@ -6,20 +6,15 @@ import json
 import random
 import requests
 
-# Importa as rotas de distribuição (App/Proxy/Pesquisa)
 from distribuicao import distribuicao_bp
 
 FRONT = Path(__file__).parent.parent / "frontend"
 app = Flask(__name__, static_folder=str(FRONT), static_url_path="")
 CORS(app)
 init_db()
-
-# Registra as rotas do arquivo distribuicao.py
 app.register_blueprint(distribuicao_bp)
 
 DROPBOX_URL = "https://www.dropbox.com/scl/fi/pat4dt7qoo4az8hvr8wmv/catalogo.json?rlkey=jkherrxg796y466etfj1s1z1a&st=562hba09&raw=1"
-
-# Cache global para não precisar baixar do Dropbox toda vez
 _cache_nuvem = None
 
 @app.route("/")
@@ -29,11 +24,8 @@ def root():
 @app.route("/api/nuvem")
 def nuvem():
     global _cache_nuvem
-    
-    # Se já tiver dados em memória, retorna na hora (API rápida)
     if _cache_nuvem is not None:
         return jsonify(_cache_nuvem)
-
     try:
         headers = {'User-Agent': 'Mozilla/5.0'}
         response = requests.get(DROPBOX_URL, headers=headers, timeout=20)
@@ -51,7 +43,6 @@ def nuvem():
         else:
             lista_final = []
 
-        # Guarda os dados em memória para a próxima chamada
         _cache_nuvem = lista_final
         return jsonify(lista_final)
     except Exception as e:
@@ -94,21 +85,11 @@ def stats():
             WHERE c.genres != '[]' AND c.genres IS NOT NULL 
             GROUP BY j.value ORDER BY total DESC LIMIT 5
         """).fetchall()]
-    except Exception: 
-        generos = []
+    except Exception: generos = []
     conn.close()
 
-    # =========================================================
-    # CÁLCULO REAL DE USO DO BANCO DE DADOS
-    # =========================================================
     db_file = Path(__file__).parent / "catalogo.db"
-    
-    if db_file.exists():
-        tamanho_mb = db_file.stat().st_size / (1024 * 1024)
-    else:
-        tamanho_mb = 0.0
-
-    # Cota reduzida para 5 MB para o gráfico ficar dinâmico
+    tamanho_mb = (db_file.stat().st_size / (1024 * 1024)) if db_file.exists() else 0.0
     COTA_MB = 5.0 
     
     porcentagem_usada = round((tamanho_mb / COTA_MB) * 100, 1)
@@ -118,12 +99,7 @@ def stats():
     return jsonify({
         "total": total, "filmes": filmes, "series": series, "generos": generos,
         "usuarios": { "ativos": random.randint(5, 20), "inativos": random.randint(1, 5) },
-        "db_usage": { 
-            "usado": porcentagem_usada, 
-            "livre": porcentagem_livre,
-            "tamanho_mb": round(tamanho_mb, 2),
-            "cota_mb": COTA_MB
-        }
+        "db_usage": { "usado": porcentagem_usada, "livre": porcentagem_livre, "tamanho_mb": round(tamanho_mb, 2), "cota_mb": COTA_MB }
     })
 
 @app.route("/api/conteudo", methods=["POST"])
@@ -158,23 +134,14 @@ def criar():
     conn.commit(); conn.close()
     return jsonify({"inseridos": ok, "erros": erros}), 201
 
-@app.route("/api/admin/conteudo/<int:id>", methods=["PUT"])
-def editar_conteudo(id):
-    dados = request.json
+# ROTA NOVA: EXCLUIR TUDO
+@app.route("/api/admin/excluir_tudo", methods=["DELETE"])
+def excluir_tudo():
     conn = get_conn()
     try:
-        conn.execute("""
-            UPDATE conteudos SET 
-                title = ?, year = ?, poster = ?, backdrop = ?, 
-                age_rating = ?, description = ?
-            WHERE id = ?
-        """, (
-            dados.get("title"), dados.get("year"), dados.get("poster"), 
-            dados.get("backdrop"), dados.get("age_rating"), 
-            dados.get("description"), id
-        ))
+        conn.execute("DELETE FROM conteudos")
         conn.commit()
-        return jsonify({"status": "ok", "message": "Atualizado com sucesso!"})
+        return jsonify({"status": "ok", "message": "Banco de dados limpo com sucesso!"})
     except Exception as e:
         return jsonify({"erro": str(e)}), 500
     finally:
