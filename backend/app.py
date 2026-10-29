@@ -98,8 +98,8 @@ def stats():
     else:
         tamanho_mb = 0.0
 
-    # Cota de segurança para cálculo da porcentagem (500 MB)
-    COTA_MB = 500.0 
+    # Cota definida para 10 MB para visualização do gráfico
+    COTA_MB = 10.0 
     
     porcentagem_usada = round((tamanho_mb / COTA_MB) * 100, 1)
     if porcentagem_usada > 100:
