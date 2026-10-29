@@ -1,7 +1,7 @@
 const Dashboard = {
   nuvemData: [],
   nuvemFiltrada: [],
-  bancoData: [], // Guarda os dados que já estão no banco
+  bancoData: [],
   filtroAtual: "todos",
   nuvemPage: 0,
   nuvemLimit: 20,
@@ -32,7 +32,10 @@ const Dashboard = {
   },
 
   async render(el) {
-    const s = await API.stats();
+    // PROTEÇÃO 2: Adiciona um timestamp para forçar a API a não vir do cache
+    const t = new Date().getTime();
+    const res = await fetch("/api/stats?t=" + t);
+    const s = await res.json();
 
     el.innerHTML = `
       <div id="drawer" class="drawer">
@@ -60,7 +63,6 @@ const Dashboard = {
           <span class="badge-status">SQLite Online</span>
         </header>
 
-        <!-- ABA PRINCIPAL: GRÁFICOS -->
         <section id="tab-main" class="tab-content active">
           <div class="charts-grid">
             <div class="chart-card">
@@ -117,7 +119,6 @@ const Dashboard = {
           <div class="form-actions"><button id="btn-salvar-form" class="btn-primary">${icon("check")} Salvar no Banco</button></div>
         </section>
 
-        <!-- ABA NUVEM -->
         <section id="tab-nuvem" class="tab-content">
           <div class="panel-header" style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap;">
             <div>
@@ -163,16 +164,14 @@ const Dashboard = {
       </div>
     `;
 
-    // Carrega os dados automaticamente ao abrir a aba
     this.carregarNuvemAuto();
 
-    // Configura o botão de excluir tudo
     document.getElementById("btn-excluir-tudo").onclick = async () => {
       if(!confirm("Tem certeza que deseja APAGAR TODOS os filmes e séries do banco?")) return;
       try {
         await fetch("/api/admin/excluir_tudo", { method: "DELETE" });
         toast("Banco de dados limpo!");
-        Dashboard.render(el); // Recarrega a tela
+        Dashboard.render(el);
       } catch(e) {
         toast("Erro ao limpar", "err");
       }
@@ -224,15 +223,15 @@ const Dashboard = {
 
   async carregarNuvemAuto() {
     const lista = document.getElementById("nuvem-lista");
+    // PROTEÇÃO 3: Força a atualização das listas com timestamp
+    const t = new Date().getTime();
     try {
-      // Puxa os dados da nuvem
-      const res = await fetch("/api/nuvem");
+      const res = await fetch("/api/nuvem?t=" + t);
       const data = await res.json();
       if (data.erro) throw new Error(data.erro);
       this.nuvemData = data;
 
-      // Puxa os dados que já estão no banco para saber o que ignorar
-      const resBanco = await fetch("/api/conteudos?limit=9999");
+      const resBanco = await fetch("/api/conteudos?limit=9999&t=" + t);
       const dataBanco = await resBanco.json();
       this.bancoData = dataBanco.itens;
 
@@ -274,7 +273,6 @@ const Dashboard = {
     const itensParaMostrar = this.nuvemFiltrada.slice(start, end);
 
     const html = itensParaMostrar.map(i => {
-      // Verifica se o item já está no banco de dados pelo titulo
       const jaExiste = this.bancoData.some(b => b.title === i.title);
       
       return `
@@ -305,7 +303,6 @@ const Dashboard = {
     const qtd = parseInt(document.getElementById("qtd-importar").value) || 0;
     if (qtd < 1) return toast("Digite uma quantidade válida", "err");
 
-    // Filtra apenas os filmes/séries que AINDA NÃO estão no banco
     const novosParaImportar = this.nuvemData.filter(i => !this.bancoData.some(b => b.title === i.title));
     
     if (novosParaImportar.length === 0) {
@@ -345,7 +342,6 @@ const Dashboard = {
     toast(`${inseridos} novos itens importados!`);
     setTimeout(() => progContainer.classList.add("hidden"), 3000);
     
-    // Recarrega os dados da tela para atualizar a lista
     this.carregarNuvemAuto();
   },
 
@@ -356,8 +352,6 @@ const Dashboard = {
     try {
       await API.criar(item);
       toast("Adicionado ao banco!");
-      
-      // Atualiza a lista local e re-renderiza para desativar o botão
       this.bancoData.push(item); 
       this.renderizarListaNuvem();
     } catch (e) {

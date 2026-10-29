@@ -17,6 +17,15 @@ app.register_blueprint(distribuicao_bp)
 DROPBOX_URL = "https://www.dropbox.com/scl/fi/pat4dt7qoo4az8hvr8wmv/catalogo.json?rlkey=jkherrxg796y466etfj1s1z1a&st=562hba09&raw=1"
 _cache_nuvem = None
 
+# PROTEÇÃO 1: Adiciona cabeçalhos para o navegador NUNCA fazer cache das APIs
+@app.after_request
+def add_header(response):
+    if request.path.startswith('/api/'):
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, post-check=0, pre-check=0, max-age=0'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '-1'
+    return response
+
 @app.route("/")
 def root():
     return send_from_directory(FRONT, "index.html")
@@ -52,7 +61,7 @@ def nuvem():
 def listar():
     tipo = request.args.get("type", "").strip()
     busca = request.args.get("q", "").strip()
-    limit = min(int(request.args.get("limit", 24)), 100)
+    limit = min(int(request.args.get("limit", 24)), 1000) # Aumentado limite para pegar tudo
     offset = int(request.args.get("offset", 0))
 
     sql = "SELECT * FROM conteudos WHERE 1=1"
@@ -90,6 +99,11 @@ def stats():
 
     db_file = Path(__file__).parent / "catalogo.db"
     tamanho_mb = (db_file.stat().st_size / (1024 * 1024)) if db_file.exists() else 0.0
+    
+    # Calcula o peso real, mas se estiver vazio, zera
+    if total == 0:
+        tamanho_mb = 0.0
+
     COTA_MB = 5.0 
     
     porcentagem_usada = round((tamanho_mb / COTA_MB) * 100, 1)
@@ -134,13 +148,14 @@ def criar():
     conn.commit(); conn.close()
     return jsonify({"inseridos": ok, "erros": erros}), 201
 
-# ROTA NOVA: EXCLUIR TUDO
 @app.route("/api/admin/excluir_tudo", methods=["DELETE"])
 def excluir_tudo():
     conn = get_conn()
     try:
         conn.execute("DELETE FROM conteudos")
         conn.commit()
+        # Otimiza o banco após deletar tudo (VACUUM) para o arquivo .db diminuir de tamanho
+        conn.execute("VACUUM")
         return jsonify({"status": "ok", "message": "Banco de dados limpo com sucesso!"})
     except Exception as e:
         return jsonify({"erro": str(e)}), 500
