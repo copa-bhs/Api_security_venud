@@ -4,7 +4,6 @@ const Dashboard = {
   filtroAtual: "todos",
   nuvemPage: 0,
   nuvemLimit: 20,
-  carregandoNuvem: false,
 
   renderDonut(percent, color, size=120, stroke=14) {
     const radius = (size - stroke) / 2;
@@ -33,9 +32,6 @@ const Dashboard = {
 
   async render(el) {
     const s = await API.stats();
-    const totalMedia = (s.filmes + s.series) || 1;
-    const pctFilmes = Math.round((s.filmes / totalMedia) * 100);
-    const pctUsuarios = Math.round((s.usuarios.ativos / (s.usuarios.ativos + s.usuarios.inativos)) * 100) || 0;
 
     el.innerHTML = `
       <div id="drawer" class="drawer">
@@ -63,13 +59,24 @@ const Dashboard = {
           <span class="badge-status">SQLite Online</span>
         </header>
 
-        <!-- ABA PRINCIPAL: OS 3 GRÁFICOS RESTAURADOS -->
+        <!-- ABA PRINCIPAL: GRÁFICOS -->
         <section id="tab-main" class="tab-content active">
           <div class="charts-grid">
+            
+            <!-- Gráfico 1: Catálogo (Real) -->
             <div class="chart-card">
-              <div class="chart-header"><h3>${icon("film")} Catálogo</h3><span>${s.total} itens</span></div>
+              <div class="chart-header">
+                <h3>${icon("film")} Catálogo</h3>
+                <span>${s.total} itens totais</span>
+              </div>
               <div class="chart-body">
-                <div class="donut-wrapper">${this.renderDonut(pctFilmes, "var(--accent)")}<div class="donut-center"><strong>${pctFilmes}%</strong><small>Filmes</small></div></div>
+                <div class="donut-wrapper">
+                  ${this.renderDonut(100, "var(--accent)")} <!-- Círculo completo para visual de catálogo -->
+                  <div class="donut-center">
+                    <strong>${s.total}</strong>
+                    <small>Itens</small>
+                  </div>
+                </div>
                 <div class="chart-legend">
                   <div class="legend-item"><div class="legend-left"><span class="dot" style="background:var(--accent)"></span> Filmes</div> <b>${s.filmes}</b></div>
                   <div class="legend-item"><div class="legend-left"><span class="dot" style="background:var(--cyan)"></span> Séries</div> <b>${s.series}</b></div>
@@ -77,10 +84,14 @@ const Dashboard = {
               </div>
             </div>
 
+            <!-- Gráfico 2: Usuários -->
             <div class="chart-card">
               <div class="chart-header"><h3>${icon("users")} Usuários</h3><span>Atividade</span></div>
               <div class="chart-body">
-                <div class="donut-wrapper">${this.renderDonut(pctUsuarios, "var(--ok)")}<div class="donut-center"><strong>${pctUsuarios}%</strong><small>Ativos</small></div></div>
+                <div class="donut-wrapper">
+                  ${this.renderDonut(Math.round((s.usuarios.ativos / (s.usuarios.ativos + s.usuarios.inativos)) * 100) || 0, "var(--ok)")}
+                  <div class="donut-center"><strong>${Math.round((s.usuarios.ativos / (s.usuarios.ativos + s.usuarios.inativos)) * 100) || 0}%</strong><small>Ativos</small></div>
+                </div>
                 <div class="chart-legend">
                   <div class="legend-item"><div class="legend-left"><span class="dot" style="background:var(--ok)"></span> Ativos</div> <b>${s.usuarios.ativos}</b></div>
                   <div class="legend-item"><div class="legend-left"><span class="dot" style="background:var(--border)"></span> Inativos</div> <b>${s.usuarios.inativos}</b></div>
@@ -88,19 +99,28 @@ const Dashboard = {
               </div>
             </div>
 
+            <!-- Gráfico 3: Armazenamento (Real) -->
             <div class="chart-card">
               <div class="chart-header"><h3>${icon("database")} Armazenamento</h3><span>Banco de Dados</span></div>
               <div class="chart-body">
-                <div class="donut-wrapper">${this.renderDonut(s.db_usage.usado, "var(--warn)")}<div class="donut-center"><strong>${s.db_usage.usado}%</strong><small>Usado</small></div></div>
+                <div class="donut-wrapper">
+                  ${this.renderDonut(s.db_usage.usado, "var(--warn)")}
+                  <div class="donut-center">
+                    <strong>${s.db_usage.tamanho_mb} <span style="font-size:14px">MB</span></strong>
+                    <small>Usado</small>
+                  </div>
+                </div>
                 <div class="chart-legend">
                   <div class="legend-item"><div class="legend-left"><span class="dot" style="background:var(--warn)"></span> Ocupado</div> <b>${s.db_usage.usado}%</b></div>
                   <div class="legend-item"><div class="legend-left"><span class="dot" style="background:var(--border)"></span> Livre</div> <b>${s.db_usage.livre}%</b></div>
                 </div>
               </div>
             </div>
+            
           </div>
         </section>
 
+        <!-- ABA ADICIONAR -->
         <section id="tab-adicionar" class="tab-content">
           <div class="panel-header"><h2>${icon("plus")} Adicionar Novo Conteúdo</h2></div>
           <div class="form-grid">
@@ -113,7 +133,7 @@ const Dashboard = {
           <div class="form-actions"><button id="btn-salvar-form" class="btn-primary">${icon("check")} Salvar no Banco</button></div>
         </section>
 
-        <!-- ABA NUVEM COMPLETA -->
+        <!-- ABA NUVEM -->
         <section id="tab-nuvem" class="tab-content">
           <div class="panel-header">
             <h2>${icon("upload")} Importar Mídias</h2>
@@ -148,13 +168,16 @@ const Dashboard = {
 
         <section id="tab-usuarios" class="tab-content">
           <div class="panel-header"><h2>${icon("users")} Usuários</h2></div>
+          <div class="info-box"><p>Sistema de usuários em desenvolvimento.</p></div>
         </section>
         <section id="tab-config" class="tab-content">
           <div class="panel-header"><h2>${icon("settings")} Configurações</h2></div>
+          <div class="info-box"><p>Versão: 4.0.0 (Cache e Gráficos Reais)</p></div>
         </section>
       </div>
     `;
 
+    // Controle de Abas
     document.querySelectorAll(".drawer-item[data-tab]").forEach(btn => {
       btn.onclick = () => {
         document.querySelectorAll(".tab-content").forEach(t => t.classList.remove("active"));
@@ -166,6 +189,7 @@ const Dashboard = {
       };
     });
 
+    // Controle dos botões de categoria
     document.querySelectorAll(".cat-btn").forEach(btn => {
       btn.onclick = () => {
         document.querySelectorAll(".cat-btn").forEach(b => b.classList.remove("active"));
@@ -182,7 +206,6 @@ const Dashboard = {
     window.onscroll = () => {
       const tabNuvem = document.getElementById("tab-nuvem");
       if (tabNuvem && tabNuvem.classList.contains("active") && this.nuvemData.length > 0) {
-        // Verifica se chegou perto do final da página
         if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 500) {
           if (this.nuvemPage * this.nuvemLimit < this.nuvemFiltrada.length) {
             this.carregarMaisItens();
@@ -190,7 +213,7 @@ const Dashboard = {
         }
       }
     };
-    
+
     document.getElementById("btn-salvar-form").onclick = async () => {
       const payload = {
         title: document.getElementById("f-title").value,
@@ -213,61 +236,42 @@ const Dashboard = {
     };
   },
 
-
-
   async carregarNuvem() {
     const lista = document.getElementById("nuvem-lista");
-    const btn = document.getElementById("btn-baixar-nuvem");
     lista.innerHTML = `<div class="loading" style="grid-column: 1/-1">${icon("spinner","icon spin")} Baixando catálogo...</div>`;
-    if(btn) btn.disabled = true;
-
     try {
       const res = await fetch("/api/nuvem");
       const data = await res.json();
-      
       if (data.erro) throw new Error(data.erro);
-      
       this.nuvemData = data;
       toast(`${data.length} itens carregados!`);
       this.renderizarListaNuvem();
     } catch (e) {
-      lista.innerHTML = `<div class="empty" style="grid-column: 1/-1; color:var(--accent);"><p>Erro: ${e.message}</p></div>`;
-      toast("Falha ao baixar", "err");
-    } finally {
-      if(btn) btn.disabled = false;
+      lista.innerHTML = `<div class="empty" style="grid-column: 1/-1; color:var(--accent)"><p>Erro: ${e.message}</p></div>`;
     }
   },
 
-
-
-
   renderizarListaNuvem() {
     const lista = document.getElementById("nuvem-lista");
-    
     let filtrados = this.nuvemData;
     
-    // Filtro por categoria
     if (this.filtroAtual !== "todos") {
       if (this.filtroAtual === "anime") {
-        filtrados = filtrados.filter(i => {
-          const isAnime = (i.genres && i.genres.some(g => g.toLowerCase() === 'animation' || g.toLowerCase() === 'animação')) ||
-                          (i.title && (i.title.toLowerCase().includes('anime') || i.original_title?.toLowerCase().includes('anime')));
-          return isAnime && i.type !== 'movie'; // Geralmente animes são séries, mas se for filme de anime, entra também. Vamos deixar passar tudo que for animação.
-        });
+        filtrados = filtrados.filter(i => (i.genres && i.genres.some(g => g.toLowerCase().includes('animation'))) || (i.title && i.title.toLowerCase().includes('anime')));
       } else {
         filtrados = filtrados.filter(i => i.type === this.filtroAtual);
       }
     }
 
     this.nuvemFiltrada = filtrados;
-    this.nuvemPage = 0; // Reseta a página ao trocar de filtro
+    this.nuvemPage = 0;
 
     if(!filtrados.length) {
       lista.innerHTML = `<div class="empty" style="grid-column:1/-1;">Nenhum item encontrado.</div>`;
       return;
     }
 
-    lista.innerHTML = ""; // Limpa a lista antes de desenhar a primeira página
+    lista.innerHTML = "";
     this.carregarMaisItens();
   },
 
@@ -298,7 +302,6 @@ const Dashboard = {
     lista.insertAdjacentHTML('beforeend', html);
     this.nuvemPage++;
   },
-
 
   async importarMassa() {
     if (this.nuvemData.length === 0) return toast("Baixe o catálogo primeiro!", "err");

@@ -19,12 +19,21 @@ app.register_blueprint(distribuicao_bp)
 
 DROPBOX_URL = "https://www.dropbox.com/scl/fi/pat4dt7qoo4az8hvr8wmv/catalogo.json?rlkey=jkherrxg796y466etfj1s1z1a&st=562hba09&raw=1"
 
+# Cache global para não precisar baixar do Dropbox toda vez
+_cache_nuvem = None
+
 @app.route("/")
 def root():
     return send_from_directory(FRONT, "index.html")
 
 @app.route("/api/nuvem")
 def nuvem():
+    global _cache_nuvem
+    
+    # Se já tiver dados em memória, retorna na hora (API rápida)
+    if _cache_nuvem is not None:
+        return jsonify(_cache_nuvem)
+
     try:
         headers = {'User-Agent': 'Mozilla/5.0'}
         response = requests.get(DROPBOX_URL, headers=headers, timeout=20)
@@ -42,6 +51,8 @@ def nuvem():
         else:
             lista_final = []
 
+        # Guarda os dados em memória para a próxima chamada
+        _cache_nuvem = lista_final
         return jsonify(lista_final)
     except Exception as e:
         return jsonify({"erro": f"Falha ao baixar do Dropbox: {str(e)}"}), 500
@@ -93,18 +104,15 @@ def stats():
     db_file = Path(__file__).parent / "catalogo.db"
     
     if db_file.exists():
-        tamanho_bytes = db_file.stat().st_size
-        tamanho_mb = tamanho_bytes / (1024 * 1024)
+        tamanho_mb = db_file.stat().st_size / (1024 * 1024)
     else:
         tamanho_mb = 0.0
 
-    # Cota definida para 10 MB para visualização do gráfico
-    COTA_MB = 10.0 
+    # Cota reduzida para 5 MB para o gráfico ficar dinâmico
+    COTA_MB = 5.0 
     
     porcentagem_usada = round((tamanho_mb / COTA_MB) * 100, 1)
-    if porcentagem_usada > 100:
-        porcentagem_usada = 100
-        
+    if porcentagem_usada > 100: porcentagem_usada = 100
     porcentagem_livre = round(100 - porcentagem_usada, 1)
 
     return jsonify({
